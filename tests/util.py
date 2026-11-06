@@ -2,6 +2,8 @@
 import unittest
 import bs4
 import textwrap
+import subprocess
+import sys
 import soupsieve as sv
 import pytest
 
@@ -102,6 +104,41 @@ class TestCase(unittest.TestCase):
         print('----Running Assert Test----')
         with self.assertRaises(exception):
             self.compile_pattern(pattern, namespaces=namespace, custom=custom)
+
+    def assert_raises_no_timeout(self, pattern, exception, timeout=30):
+        """
+        Assert raises, failing on a timeout instead of hanging.
+
+        The pattern is first compiled in a separate process that is killed if it does not
+        finish within `timeout` seconds (e.g. due to catastrophic regular expression
+        backtracking). A separate process is used as `signal.alarm` is not available on
+        all platforms and the regular expression engine cannot be interrupted from another
+        thread.
+        """
+
+        code = (
+            'import sys\n'
+            'import soupsieve as sv\n'
+            'try:\n'
+            '    sv.compile(sys.stdin.buffer.read().decode())\n'
+            'except Exception:\n'
+            '    pass\n'
+        )
+
+        print('----Running Assert Timeout Test----')
+        try:
+            result = subprocess.run(
+                [sys.executable, '-c', code],
+                input=pattern.encode('utf-8'),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout
+            )
+        except subprocess.TimeoutExpired:
+            self.fail('Compiling the pattern timed out after {} seconds'.format(timeout))
+        self.assertEqual(result.returncode, 0, result.stderr.decode('utf-8', 'replace'))
+
+        self.assert_raises(pattern, exception)
 
     def assert_selector(self, markup, selectors, expected_ids, namespaces={}, custom=None, flags=0):
         """Assert selector."""
