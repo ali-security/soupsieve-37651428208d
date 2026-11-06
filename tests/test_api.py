@@ -590,6 +590,55 @@ class TestInvalid(util.TestCase):
         with self.assertRaises(TypeError):
             sv.filter('div', "not a tag", flags=flags)
 
+    def test_excessive_selectors(self):
+        """Test excessive selectors."""
+
+        # Build a 500 KB selector string: "a,a,a,...,a" (250,000 items)
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(selector)
+
+    def test_excessive_custom_selectors(self):
+        """Test excessive custom selectors."""
+
+        # Build a 500 KB selector string: "a,a,a,...,a" (250,000 items)
+        count = 10000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile('div:--custom', custom={':--custom': selector})
+
+    def test_excessive_custom_and_normal_selectors(self):
+        """Test excessive custom and normal selectors."""
+
+        count = 5000
+        selector = ",".join("a" for _ in range(count))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile(f':is({selector}):--custom', custom={':--custom': selector})
+
+    def test_excessive_repeated_custom_selectors(self):
+        """Test excessive selectors from repeatedly referencing a custom selector."""
+
+        # Each reference to the custom selector contributes all of its selectors.
+        selector = ",".join("a" for _ in range(100))
+
+        # Compile the selector
+        with self.assertRaises(ValueError):
+            sv.compile('div' + ':--custom' * 100, custom={':--custom': selector})
+
+    def test_excessive_builtin_pseudo_class_selectors(self):
+        """Test excessive selectors from repeating pseudo-classes that expand to pre-defined selectors."""
+
+        # `:read-only` expands to a large pre-defined selector list that contributes to the count.
+        with self.assertRaises(ValueError):
+            sv.compile('input' + ':read-only' * 200)
+
 
 class TestSyntaxErrorReporting(util.TestCase):
     """Test reporting of syntax errors."""
